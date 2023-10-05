@@ -1,11 +1,12 @@
+from django.contrib.auth.models import User
 from django.db import models
 
 
 class Customer(models.Model):
-    # Поля для пользователя-покупателя
-    pass
+    user = models.OneToOneField(User, on_delete=models.CASCADE)
+    # Дополнительные поля клиента
 
 
 class Order(models.Model):
-    # Модель заказа
-    pass
+    customer = models.ForeignKey(Customer, on_delete=models.CASCADE)
+    # Другие поля заказа

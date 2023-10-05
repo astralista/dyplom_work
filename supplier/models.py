@@ -2,10 +2,12 @@ from django.db import models
 
 
 class Supplier(models.Model):
-    # Поля для поставщика
-    pass
+    name = models.CharField(max_length=100)
+    is_accepting_orders = models.BooleanField(default=True)
+    # Другие поля поставщика
 
 
 class Product(models.Model):
-    # Модель товара
-    pass
+    supplier = models.ForeignKey(Supplier, on_delete=models.CASCADE)
+    name = models.CharField(max_length=100)
+    # Другие поля товара
