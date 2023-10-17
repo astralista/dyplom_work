@@ -1,12 +1,12 @@
-version: '3'
+version: '3.9'
 
 services:
   db:
-    image: postgres:13
+    image: postgres:14.3-alpine3.15
     environment:
-      POSTGRES_DB: your_db_name
-      POSTGRES_USER: your_db_user
-      POSTGRES_PASSWORD: your_db_password
+      POSTGRES_DB: ${PG_DB}
+      POSTGRES_USER: ${PG_USER}
+      POSTGRES_PASSWORD: ${PG_PSWD}
 
   web:
     build: .
