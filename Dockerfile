@@ -1,5 +1,5 @@
 # Используем официальный образ Python
-FROM python:3.8
+FROM python:3.11
 
 # Устанавливаем переменную среды для Python, чтобы вывод был более читаемым
 ENV PYTHONUNBUFFERED 1

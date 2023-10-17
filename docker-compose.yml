@@ -1,21 +1,20 @@
-version: '3.9'
+version: '2.4'
 
 services:
   db:
     image: postgres:14.3-alpine3.15
+    mem_limit: 1GB
     environment:
-      POSTGRES_DB: ${PG_DB}
       POSTGRES_USER: ${PG_USER}
       POSTGRES_PASSWORD: ${PG_PSWD}
+      POSTGRES_DB: ${PG_DB}
 
   web:
     build: .
     command: python manage.py runserver 0.0.0.0:8000
+    mem_limit: 1GB
     volumes:
       - .:/app
     ports:
       - "8000:8000"
-    depends_on:
-      - db
-    links:
-      - db
+
