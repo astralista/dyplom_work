@@ -1,20 +1,26 @@
-version: '2.4'
+version: '3.9'
 
 services:
   db:
     image: postgres:14.3-alpine3.15
-    mem_limit: 1GB
+    ports:
+      - '5432:5432'
     environment:
-      POSTGRES_USER: ${PG_USER}
-      POSTGRES_PASSWORD: ${PG_PSWD}
-      POSTGRES_DB: ${PG_DB}
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: dyplom_db1
 
   web:
     build: .
-    command: python manage.py runserver 0.0.0.0:8000
-    mem_limit: 1GB
+    command: >
+      sh -c "while ! nc -z db 5432; do sleep 1; done &&
+      python manage.py collectstatic --noinput &&
+      python manage.py makemigrations &&
+      python manage.py migrate &&
+      python manage.py runserver 0.0.0.0:8000"
     volumes:
       - .:/app
     ports:
       - "8000:8000"
-
+    depends_on:
+      - db

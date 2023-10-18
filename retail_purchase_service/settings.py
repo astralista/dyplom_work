@@ -82,11 +82,11 @@ WSGI_APPLICATION = "retail_purchase_service.wsgi.application"
 DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.postgresql",
-        "NAME": os.getenv("PG_DB"),
-        "USER": os.getenv("PG_USER"),
-        "PASSWORD": os.getenv("PG_PSWD"),
-        "HOST": os.getenv("PG_HOST", "127.0.0.1"),
-        "PORT": os.getenv("PG_PORT", "5432"),
+        "NAME": "dyplom_db1",
+        "USER": "postgres",
+        "PASSWORD": "postgres",
+        "HOST": "db",
+        "PORT": "5432",
     }
 }
 
@@ -124,7 +124,7 @@ USE_TZ = True
 
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/4.2/howto/static-files/
-
+STATIC_ROOT = '/app/static/'
 STATIC_URL = "static/"
 
 # Default primary key field type

@@ -17,10 +17,8 @@ Including another URLconf
 from django.urls import include, path
 from rest_framework.routers import DefaultRouter
 
-from retail_purchase_service.customer.views import (CustomerViewSet,
-                                                    OrderViewSet)
-from retail_purchase_service.supplier.views import (ProductViewSet,
-                                                    SupplierViewSet)
+from customer.views import (CustomerViewSet,OrderViewSet)
+from supplier.views import (ProductViewSet, SupplierViewSet)
 
 router = DefaultRouter()
 router.register(r"customers", CustomerViewSet)
