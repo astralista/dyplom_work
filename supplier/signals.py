@@ -1,8 +1,7 @@
-from django.dispatch import receiver, Signal
+from django.dispatch import Signal, receiver
 from django_rest_passwordreset.signals import reset_password_token_created
 
 from customer.models import ConfirmEmailToken, User
-
 
 from .tasks import send_email
 
@@ -23,7 +22,7 @@ def password_reset_token_created(sender, instance, reset_password_token, **kwarg
     :return:
     """
     # send an e-mail to the user
-    message = f'Token {reset_password_token.key}'
+    message = f"Token {reset_password_token.key}"
     email = reset_password_token.user
     send_email(message, email)
 
@@ -48,6 +47,6 @@ def new_order_signal(user_id, **kwargs):
     # send an e-mail to the user
     user = User.objects.get(id=user_id)
     title = "Обновление статуса заказа"
-    message = 'Заказ сформирован'
+    message = "Заказ сформирован"
     email = user.email
     send_email.apply_async((title, message, email), countdown=5 * 60)

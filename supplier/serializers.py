@@ -1,17 +1,27 @@
 from rest_framework import serializers
 
-from .models import User, Category, Shop, ProductInfo, Product, ProductParameter, OrderItem, Order, Contact
-from customer.models import User, Contact
+from customer.models import Contact, User
+
+from .models import (Category, Contact, Order, OrderItem, Product, ProductInfo,
+                     ProductParameter, Shop, User)
 
 
 class ContactSerializer(serializers.ModelSerializer):
     class Meta:
         model = Contact
-        fields = ('id', 'city', 'street', 'house', 'apartment', 'e_mail', 'user', 'phone', 'work_phone',)
-        read_only_fields = ('id',)
-        extra_kwargs = {
-            'user': {'write_only': True}
-        }
+        fields = (
+            "id",
+            "city",
+            "street",
+            "house",
+            "apartment",
+            "e_mail",
+            "user",
+            "phone",
+            "work_phone",
+        )
+        read_only_fields = ("id",)
+        extra_kwargs = {"user": {"write_only": True}}
 
 
 class UserSerializer(serializers.ModelSerializer):
@@ -19,22 +29,34 @@ class UserSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = User
-        fields = ('id', 'first_name', 'last_name', 'email', 'company', 'position', 'type', 'contacts')
-        read_only_fields = ('id',)
+        fields = (
+            "id",
+            "first_name",
+            "last_name",
+            "email",
+            "company",
+            "position",
+            "type",
+            "contacts",
+        )
+        read_only_fields = ("id",)
 
 
 class CategorySerializer(serializers.ModelSerializer):
     class Meta:
         model = Category
-        fields = ('id', 'name',)
-        read_only_fields = ('id',)
+        fields = (
+            "id",
+            "name",
+        )
+        read_only_fields = ("id",)
 
 
 class ShopSerializer(serializers.ModelSerializer):
     class Meta:
         model = Shop
-        fields = ('id', 'name', 'state')
-        read_only_fields = ('id',)
+        fields = ("id", "name", "state")
+        read_only_fields = ("id",)
 
 
 class ProductSerializer(serializers.ModelSerializer):
@@ -42,7 +64,10 @@ class ProductSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Product
-        fields = ('name', 'category',)
+        fields = (
+            "name",
+            "category",
+        )
 
 
 class ProductParameterSerializer(serializers.ModelSerializer):
@@ -50,7 +75,10 @@ class ProductParameterSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = ProductParameter
-        fields = ('parameter', 'value',)
+        fields = (
+            "parameter",
+            "value",
+        )
 
 
 class ProductInfoSerializer(serializers.ModelSerializer):
@@ -59,18 +87,25 @@ class ProductInfoSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = ProductInfo
-        fields = ('id', 'model', 'product', 'shop', 'quantity', 'price', 'price_rrc', 'product_parameters',)
-        read_only_fields = ('id',)
+        fields = (
+            "id",
+            "model",
+            "product",
+            "shop",
+            "quantity",
+            "price",
+            "price_rrc",
+            "product_parameters",
+        )
+        read_only_fields = ("id",)
 
 
 class OrderItemSerializer(serializers.ModelSerializer):
     class Meta:
         model = OrderItem
-        fields = ('id', 'product_info', 'quantity', 'order')
-        read_only_fields = ('id',)
-        extra_kwargs = {
-            'order': {'write_only': True}
-        }
+        fields = ("id", "product_info", "quantity", "order")
+        read_only_fields = ("id",)
+        extra_kwargs = {"order": {"write_only": True}}
 
 
 class OrderItemCreateSerializer(OrderItemSerializer):
@@ -85,5 +120,12 @@ class OrderSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Order
-        fields = ('id', 'ordered_items', 'status', 'dt', 'total_sum', 'contact',)
-        read_only_fields = ('id',)
+        fields = (
+            "id",
+            "ordered_items",
+            "status",
+            "dt",
+            "total_sum",
+            "contact",
+        )
+        read_only_fields = ("id",)
