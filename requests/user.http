@@ -1,0 +1,44 @@
+@baseUrl = http://localhost:8000/api/v1
+
+# Регистрация покупателя
+POST {{baseUrl}}/user/register
+Content-Type: application/json
+
+{
+	"first_name": "user1",
+	"last_name": "user1",
+	"email": "user1@user.com",
+	"password": "P4ssWord1",
+	"company": "",
+	"position": ""
+}
+
+###
+
+# Авторизация
+POST {{baseUrl}}/user/login
+Content-Type: application/json
+
+{
+	"email": "user1@user.com",
+	"password": "P4ssWord1"
+}
+
+###
+
+# Контакты пользователя
+GET {{baseUrl}}/user/contact
+Content-Type: application/json
+Authorization: Token 85fa1df99ffe8273d025ff5954f7b2eccdc993c9
+
+###
+
+# Сброс пароля
+POST  {{baseUrl}}/user/contact
+Content-Type: application/json
+
+{
+    "email": "user1@user.com"
+}
+
+###
