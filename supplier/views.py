@@ -77,7 +77,7 @@ class RegisterAccount(APIView):
         # Отправляем письмо с токеном по электронной почте
         subject = "Подтверждение регистрации"
         message = (f"Для подтверждения регистрации перейдите по ссылке: {settings.BASE_URL}/user/register"
-                   f"/confirm?token={token.key}")
+                   f"/confirm?token={token.key}&email={user.email}")
         from_email = settings.DEFAULT_FROM_EMAIL
         to_email = user.email
 
@@ -91,38 +91,37 @@ class ConfirmAccount(APIView):
 
     throttle_scope = "anon"
 
-    def post(self, request, *args, **kwargs):
-        if {"email"}.issubset(request.data):
-            user = User.objects.filter(email=request.data["email"]).first()
+    def get(self, request, *args, **kwargs):
+        email = self.request.query_params.get('email')
+        token = self.request.query_params.get('token')
+
+        if email and token:
+            user = User.objects.filter(email=email).first()
             if user:
-                self.send_confirmation_email(user)
-                return Response({"Status": True, "Message": "Письмо с подтверждением отправлено"})
+                token_obj = ConfirmEmailToken.objects.filter(
+                    user=user, key=token).first()
+
+                if token_obj:
+                    user.is_active = True
+                    user.save()
+                    token_obj.delete()
+                    return Response({"Status": True, "Message": "Пользователь успешно активирован"})
+                else:
+                    return Response(
+                        {"Status": False, "Errors": "Неправильно указан токен подтверждения."},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
             else:
                 return Response(
                     {"Status": False, "Errors": "Пользователь с указанным email не найден"},
                     status=status.HTTP_404_NOT_FOUND,
                 )
-        return Response(
-            {"Status": False, "Errors": "Не указан email"},
-            status=status.HTTP_400_BAD_REQUEST,
-        )
+        else:
+            return Response(
+                {"Status": False, "Errors": "Не указан email или токен"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
-    def send_confirmation_email(self, user):
-        # Создаем токен для подтверждения email
-        token_generator = ConfirmEmailToken()
-        token = token_generator.generate_key()
-
-        # Составляем URL для подтверждения email
-        uidb64 = urlsafe_base64_encode(force_bytes(user.pk))
-        confirm_url = reverse("user-register:confirm-email", args=[uidb64, token])
-
-        # Отправляем письмо с токеном по электронной почте
-        subject = "Подтверждение регистрации"
-        message = f"Для подтверждения регистрации перейдите по ссылке: {settings.BASE_URL}{confirm_url}"
-        from_email = settings.DEFAULT_FROM_EMAIL
-        to_email = user.email
-
-        send_mail(subject, message, from_email, [to_email])
 
 
 class LoginAccount(APIView):
