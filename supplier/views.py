@@ -17,7 +17,7 @@ from ujson import loads as load_json
 from yaml import Loader
 from yaml import load as load_yaml
 
-from customer.models import ConfirmEmailToken, Contact
+from customer.models import ConfirmEmailToken, Contact, User
 from supplier.tasks import import_shop_data
 
 from .models import (Category, Order, OrderItem, Parameter, Product,
@@ -28,6 +28,13 @@ from .serializers import (CategorySerializer, ContactSerializer,
                           UserSerializer)
 from .signals import new_user_registered
 
+from django.core.mail import send_mail
+from django.contrib.auth.tokens import PasswordResetTokenGenerator
+from django.utils.encoding import force_bytes
+from django.utils.http import urlsafe_base64_encode
+from django.urls import reverse
+from django_rest_passwordreset.tokens import get_token_generator
+
 
 class RegisterAccount(APIView):
     """
@@ -36,49 +43,45 @@ class RegisterAccount(APIView):
 
     throttle_scope = "anon"
 
-    # Регистрация методом POST
     def post(self, request, *args, **kwargs):
-        # проверяем обязательные аргументы
-        if {
-            "first_name",
-            "last_name",
-            "email",
-            "password",
-            "company",
-            "position",
-        }.issubset(request.data):
-            errors = {}
-
-            # проверяем пароль на сложность
-
+        required_fields = {"first_name", "last_name", "email", "password", "company", "position", "username"}
+        # проверка пароля
+        if required_fields.issubset(request.data):
             try:
                 validate_password(request.data["password"])
             except Exception as password_error:
-                error_array = []
-                # noinspection PyTypeChecker
-                for item in password_error:
-                    error_array.append(item)
+                error_array = [item for item in password_error]
+                return JsonResponse({"Status": False, "Errors": {"password": error_array}})
+            # проверка имени
+            user_serializer = UserSerializer(data=request.data)
+            if user_serializer.is_valid():
+                user = self.create_inactive_user(user_serializer.data, request.data["password"])
+                self.send_confirmation_email(user)
                 return JsonResponse(
-                    {"Status": False, "Errors": {"password": error_array}}
-                )
+                    {"Status": True, "Message": "Регистрация успешно завершена. Письмо с подтверждением отправлено"})
             else:
-                # проверяем данные для уникальности имени пользователя
-                request.data.update({})
-                user_serializer = UserSerializer(data=request.data)
-                if user_serializer.is_valid():
-                    # сохраняем пользователя
-                    user = user_serializer.save()
-                    user.set_password(request.data["password"])
-                    user.save()
-                    return JsonResponse({"Status": True})
-                else:
-                    return JsonResponse(
-                        {"Status": False, "Errors": user_serializer.errors}
-                    )
+                return JsonResponse({"Status": False, "Errors": user_serializer.errors})
 
-        return JsonResponse(
-            {"Status": False, "Errors": "Не указаны все необходимые аргументы"}
-        )
+    def create_inactive_user(self, data, password):
+        user = User.objects.create(**data)
+        user.set_password(password)
+        user.is_active = False
+        user.save()
+        return user
+
+    def send_confirmation_email(self, user):
+        # Создаем токен для подтверждения email
+        token_generator = get_token_generator()
+        token = ConfirmEmailToken.objects.create(user=user)
+
+        # Отправляем письмо с токеном по электронной почте
+        subject = "Подтверждение регистрации"
+        message = (f"Для подтверждения регистрации перейдите по ссылке: {settings.BASE_URL}/user/register"
+                   f"/confirm?token={token.key}")
+        from_email = settings.DEFAULT_FROM_EMAIL
+        to_email = user.email
+
+        send_mail(subject, message, from_email, [to_email])
 
 
 class ConfirmAccount(APIView):
@@ -89,24 +92,37 @@ class ConfirmAccount(APIView):
     throttle_scope = "anon"
 
     def post(self, request, *args, **kwargs):
-        # проверяем обязательные аргументы
-        if {"email", "token"}.issubset(request.data):
-            token = ConfirmEmailToken.objects.filter(
-                user__email=request.data["email"], key=request.data["token"]
-            ).first()
-            if token:
-                token.user.is_active = True
-                token.user.save()
-                token.delete()
-                return Response({"Status": True})
+        if {"email"}.issubset(request.data):
+            user = User.objects.filter(email=request.data["email"]).first()
+            if user:
+                self.send_confirmation_email(user)
+                return Response({"Status": True, "Message": "Письмо с подтверждением отправлено"})
             else:
                 return Response(
-                    {"Status": False, "Errors": "Неправильно указан токен или email"}
+                    {"Status": False, "Errors": "Пользователь с указанным email не найден"},
+                    status=status.HTTP_404_NOT_FOUND,
                 )
         return Response(
-            {"Status": False, "Errors": "Не указаны все необходимые аргументы"},
+            {"Status": False, "Errors": "Не указан email"},
             status=status.HTTP_400_BAD_REQUEST,
         )
+
+    def send_confirmation_email(self, user):
+        # Создаем токен для подтверждения email
+        token_generator = ConfirmEmailToken()
+        token = token_generator.generate_key()
+
+        # Составляем URL для подтверждения email
+        uidb64 = urlsafe_base64_encode(force_bytes(user.pk))
+        confirm_url = reverse("user-register:confirm-email", args=[uidb64, token])
+
+        # Отправляем письмо с токеном по электронной почте
+        subject = "Подтверждение регистрации"
+        message = f"Для подтверждения регистрации перейдите по ссылке: {settings.BASE_URL}{confirm_url}"
+        from_email = settings.DEFAULT_FROM_EMAIL
+        to_email = user.email
+
+        send_mail(subject, message, from_email, [to_email])
 
 
 class LoginAccount(APIView):

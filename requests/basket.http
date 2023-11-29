@@ -1,7 +1,29 @@
 @baseUrl = http://localhost:8000/api/v1
 
-# Корзина
+# Корзина GET
+GET {{baseUrl}}/basket
+Content-Type: application/json
+Authorization: Token 2a940bcc2a0ed30b487394edf70ee0131b7712cf
+
+###
+
+# Корзина POST
 POST {{baseUrl}}/basket
 Content-Type: application/json
+Authorization: Token 2a940bcc2a0ed30b487394edf70ee0131b7712cf
 
+###
 
+# Корзина PUT
+PUT {{baseUrl}}/basket
+Content-Type: application/json
+Authorization: Token 2a940bcc2a0ed30b487394edf70ee0131b7712cf
+
+###
+
+# Корзина DELETE
+DELETE {{baseUrl}}/basket
+Content-Type: application/json
+Authorization: Token 2a940bcc2a0ed30b487394edf70ee0131b7712cf
+
+###
