@@ -3,11 +3,16 @@ from distutils.util import strtobool
 from django.conf import settings
 from django.contrib.auth import authenticate
 from django.contrib.auth.password_validation import validate_password
+from django.contrib.auth.tokens import PasswordResetTokenGenerator
+from django.core.mail import send_mail
 from django.db import IntegrityError
 from django.db.models import F, Q, Sum
 from django.db.models.query import Prefetch
 from django.http import JsonResponse
-from requests import get
+from django.urls import reverse
+from django.utils.encoding import force_bytes
+from django.utils.http import urlsafe_base64_encode
+from django_rest_passwordreset.tokens import get_token_generator
 from rest_framework import status, viewsets
 from rest_framework.authtoken.models import Token
 from rest_framework.generics import ListAPIView
@@ -18,6 +23,7 @@ from yaml import Loader
 from yaml import load as load_yaml
 
 from customer.models import ConfirmEmailToken, Contact, User
+from requests import get
 from supplier.tasks import import_shop_data
 
 from .models import (Category, Order, OrderItem, Parameter, Product,
@@ -28,13 +34,6 @@ from .serializers import (CategorySerializer, ContactSerializer,
                           UserSerializer)
 from .signals import new_user_registered
 
-from django.core.mail import send_mail
-from django.contrib.auth.tokens import PasswordResetTokenGenerator
-from django.utils.encoding import force_bytes
-from django.utils.http import urlsafe_base64_encode
-from django.urls import reverse
-from django_rest_passwordreset.tokens import get_token_generator
-
 
 class RegisterAccount(APIView):
     """
@@ -44,21 +43,37 @@ class RegisterAccount(APIView):
     throttle_scope = "anon"
 
     def post(self, request, *args, **kwargs):
-        required_fields = {"first_name", "last_name", "email", "password", "company", "position", "username"}
+        required_fields = {
+            "first_name",
+            "last_name",
+            "email",
+            "password",
+            "company",
+            "position",
+            "username",
+        }
         # проверка пароля
         if required_fields.issubset(request.data):
             try:
                 validate_password(request.data["password"])
             except Exception as password_error:
                 error_array = [item for item in password_error]
-                return JsonResponse({"Status": False, "Errors": {"password": error_array}})
+                return JsonResponse(
+                    {"Status": False, "Errors": {"password": error_array}}
+                )
             # проверка имени
             user_serializer = UserSerializer(data=request.data)
             if user_serializer.is_valid():
-                user = self.create_inactive_user(user_serializer.data, request.data["password"])
+                user = self.create_inactive_user(
+                    user_serializer.data, request.data["password"]
+                )
                 self.send_confirmation_email(user)
                 return JsonResponse(
-                    {"Status": True, "Message": "Регистрация успешно завершена. Письмо с подтверждением отправлено"})
+                    {
+                        "Status": True,
+                        "Message": "Регистрация успешно завершена. Письмо с подтверждением отправлено",
+                    }
+                )
             else:
                 return JsonResponse({"Status": False, "Errors": user_serializer.errors})
 
@@ -76,8 +91,10 @@ class RegisterAccount(APIView):
 
         # Отправляем письмо с токеном по электронной почте
         subject = "Подтверждение регистрации"
-        message = (f"Для подтверждения регистрации перейдите по ссылке: {settings.BASE_URL}/user/register"
-                   f"/confirm?token={token.key}&email={user.email}")
+        message = (
+            f"Для подтверждения регистрации перейдите по ссылке: {settings.BASE_URL}/user/register"
+            f"/confirm?token={token.key}&email={user.email}"
+        )
         from_email = settings.DEFAULT_FROM_EMAIL
         to_email = user.email
 
@@ -92,28 +109,37 @@ class ConfirmAccount(APIView):
     throttle_scope = "anon"
 
     def get(self, request, *args, **kwargs):
-        email = self.request.query_params.get('email')
-        token = self.request.query_params.get('token')
+        email = self.request.query_params.get("email")
+        token = self.request.query_params.get("token")
 
         if email and token:
             user = User.objects.filter(email=email).first()
             if user:
                 token_obj = ConfirmEmailToken.objects.filter(
-                    user=user, key=token).first()
+                    user=user, key=token
+                ).first()
 
                 if token_obj:
                     user.is_active = True
                     user.save()
                     token_obj.delete()
-                    return Response({"Status": True, "Message": "Пользователь успешно активирован"})
+                    return Response(
+                        {"Status": True, "Message": "Пользователь успешно активирован"}
+                    )
                 else:
                     return Response(
-                        {"Status": False, "Errors": "Неправильно указан токен подтверждения."},
+                        {
+                            "Status": False,
+                            "Errors": "Неправильно указан токен подтверждения.",
+                        },
                         status=status.HTTP_400_BAD_REQUEST,
                     )
             else:
                 return Response(
-                    {"Status": False, "Errors": "Пользователь с указанным email не найден"},
+                    {
+                        "Status": False,
+                        "Errors": "Пользователь с указанным email не найден",
+                    },
                     status=status.HTTP_404_NOT_FOUND,
                 )
         else:
@@ -121,7 +147,6 @@ class ConfirmAccount(APIView):
                 {"Status": False, "Errors": "Не указан email или токен"},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-
 
 
 class LoginAccount(APIView):
