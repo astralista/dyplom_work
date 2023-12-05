@@ -690,14 +690,20 @@ class PartnerUpdate(APIView):
                 status=status.HTTP_403_FORBIDDEN,
             )
 
-        file = request.FILES
+        file = request.FILES.get("file")
         if file:
             user_id = request.user.id
-            import_shop_data(file, user_id)
-
-            return Response({"Status": True})
+            try:
+                import_shop_data(file, user_id)
+                return Response({"Status": True, "Message": "Данные успешно загружены"})
+            except Exception as e:
+                return Response(
+                    {"Status": False, "Error": f"Произошла ошибка: {str(e)}"},
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                )
 
         return Response(
             {"Status": False, "Errors": "Не указаны все необходимые аргументы"},
             status=status.HTTP_400_BAD_REQUEST,
         )
+
