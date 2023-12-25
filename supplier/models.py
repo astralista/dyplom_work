@@ -57,6 +57,7 @@ class Category(models.Model):
 
 
 class Product(models.Model):
+    external_id = models.PositiveIntegerField(verbose_name="Внешний ID продукта", unique=True, default=0)
     name = models.CharField(max_length=100, verbose_name="Название продукта")
     category = models.ForeignKey(
         Category,
@@ -64,6 +65,14 @@ class Product(models.Model):
         related_name="products",
         blank=True,
         on_delete=models.CASCADE,
+    )
+    shop = models.ForeignKey(
+        Shop,
+        verbose_name="Магазин",
+        related_name="products",
+        blank=True,
+        on_delete=models.CASCADE,
+        default=1
     )
 
     class Meta:

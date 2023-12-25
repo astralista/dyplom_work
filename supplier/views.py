@@ -694,6 +694,7 @@ class PartnerUpdate(APIView):
         if file:
             user_id = request.user.id
             try:
+                # Прямо передаем объект файла, а не его содержимое
                 import_shop_data(file, user_id)
                 return Response({"Status": True, "Message": "Данные успешно загружены"})
             except Exception as e:

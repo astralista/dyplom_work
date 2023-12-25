@@ -1,12 +1,19 @@
 import yaml
+import json
 from django.conf.global_settings import EMAIL_HOST_USER
 from django.core.mail.message import EmailMultiAlternatives
 from django.core.exceptions import ValidationError
 from django.core.files.storage import default_storage
+from django.db import transaction
+from django.db.utils import IntegrityError
+from typing import Union
 
 from retail_purchase_service.celery import app
 
-from .models import Category, Parameter, Product, ProductParameter, Shop
+from .models import Category, Parameter, Product, ProductParameter, Shop, ProductInfo
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 @app.task()
@@ -24,78 +31,121 @@ def send_email(message: str, email: str, *args, **kwargs) -> str:
         raise e
 
 
-def open_file(shop):
-    file_path = shop.get_file()
-
-    # Проверяем, существует ли файл
-    if not default_storage.exists(file_path):
-        raise FileNotFoundError(f"File not found: {file_path}")
-
+def open_file(file) -> Union[str, dict]:
     try:
-        # Пытаемся прочитать и загрузить данные из файла
-        with default_storage.open(file_path, "r") as f:
-            data = yaml.safe_load(f)
-            if data is None:
-                raise ValueError("File is empty or contains invalid YAML")
-    except (FileNotFoundError, ValueError, ValidationError) as e:
-        raise e  # Пробрасываем исключение дальше
+        # Чтение данных из InMemoryUploadedFile
+        file_data = file.read()
+        # Преобразование данных в строку
+        file_str = file_data.decode('utf-8')
+        # Загрузка JSON
+        data = json.loads(file_str)
+        return data
+    except Exception as e:
+        print(f"Error opening file: {e}")
+        raise
 
-    return data
 
-
-@app.task()
-def import_shop_data(data, user_id):
+@app.task
+def import_shop_data(file, user_id):
     try:
-        file = open_file(data)
-        shop_data = file.get("shop", {})
-        categories_data = file.get("categories", [])
-        goods_data = file.get("goods", [])
+        file_content = open_file(file)
+        if isinstance(file_content, str):
+            data = json.loads(file_content)
+        else:
+            data = file_content
 
-        shop, _ = Shop.objects.get_or_create(
-            user_id=user_id, defaults={"name": shop_data.get("name", "")}
-        )
+        goods_data = data.get("goods", [])
 
-        load_cat = [
-            Category(id=category.get("id", ""), name=category.get("name", ""))
-            for category in categories_data
-        ]
-        Category.objects.bulk_create(load_cat)
+        if not isinstance(goods_data, list):
+            raise ValueError("Invalid 'goods' data format")
 
-        Product.objects.filter(shop_id=shop.id).delete()
+        shop_name = data.get("shop", "")
 
-        load_prod = []
-        product_id = {}
-        load_pp = []
-        for item in goods_data:
-            load_prod.append(
-                Product(
-                    name=item.get("name", ""),
-                    category_id=item.get("category", ""),
-                    model=item.get("model", ""),
-                    external_id=item.get("id", ""),
-                    shop_id=shop.id,
-                    quantity=item.get("quantity", 0),
-                    price=item.get("price", 0),
-                    price_rrc=item.get("price_rrc", 0),
-                )
+        shop_data = data.get("shop_data", {})
+        categories_data = shop_data.get("categories", [])
+
+        with transaction.atomic():
+            shop, _ = Shop.objects.get_or_create(
+                user_id=user_id, defaults={"name": shop_name}
             )
-            product_id[item.get("id", "")] = {}
 
-            for name, value in item.get("parameters", {}).items():
-                parameter, _ = Parameter.objects.get_or_create(name=name)
-                product_id[item.get("id", "")].update({parameter.id: value})
-                load_pp.append(
-                    ProductParameter(
-                        product_id=product_id[item.get("id", "")][parameter.id],
-                        parameter_id=parameter.id,
-                        value=value,
-                    )
-                )
+            # Добавим категории
+            categories_to_create = [
+                Category(name=category_data.get("name", ""))
+                for category_data in categories_data
+            ]
 
-        Product.objects.bulk_create(load_prod)
-        ProductParameter.objects.bulk_create(load_pp)
+            try:
+                with transaction.atomic():
+                    Category.objects.bulk_create(categories_to_create)
+                    print(f"Categories created successfully.")
+            except Exception as e:
+                print(f"Error creating categories: {e}")
+                for category in categories_to_create:
+                    try:
+                        existing_category = Category.objects.get(name=category.name)
+                        print(f"Category {category.name} already exists with ID {existing_category.id}")
+                    except Category.DoesNotExist:
+                        print(f"Category {category.name} does not exist.")
+
+            # Очистим продукты для данного магазина
+            Product.objects.filter(shop_id=shop.id).delete()
+
+            load_prod = []
+            for item in goods_data:
+                if isinstance(item, dict):
+                    category_data = item.get("category", "")
+                    if isinstance(category_data, dict):
+                        category_id = category_data.get("id", "")
+                    else:
+                        try:
+                            category = Category.objects.get(name=category_data)
+                            category_id = category.id
+                        except Category.DoesNotExist:
+                            print(f"Category {category_data} does not exist for shop {shop_name}.")
+                            continue
+
+                    try:
+                        product, created = Product.objects.get_or_create(
+                            external_id=item.get("id", ""),
+                            defaults={
+                                "name": item.get("name", ""),
+                                "category_id": category_id,
+                                "shop_id": shop.id,
+                            },
+                        )
+                        if not created:
+                            print(f"Product {item.get('name', '')} already exists")
+
+                        # Добавим информацию о продукте
+                        product_info, _ = ProductInfo.objects.get_or_create(
+                            model=item.get("model", ""),
+                            quantity=item.get("quantity", 0),
+                            price=item.get("price", 0),
+                            price_rrc=item.get("price_rrc", 0),
+                            product=product,
+                            shop=shop,
+                        )
+
+                        # Добавим параметры продукта
+                        parameters = item.get("parameters", [])
+                        for param in parameters:
+                            parameter_name = param.get("name", "")
+                            parameter_value = param.get("value", "")
+                            parameter, _ = Parameter.objects.get_or_create(
+                                name=parameter_name
+                            )
+
+                            ProductParameter.objects.get_or_create(
+                                product_info=product_info,
+                                parameter=parameter,
+                                value=parameter_value,
+                            )
+
+                    except IntegrityError as e:
+                        print(f"Error inserting product {item.get('name', '')}: {e}")
 
         return {"Status": True, "Message": "Данные успешно обновлены"}
     except Exception as e:
-        return {"Status": False, "Error": f"Произошла ошибка: {str(e)}"}
-
+        logger.error(f"Error during data import: {e}")
+        raise
