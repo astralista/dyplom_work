@@ -1,16 +1,13 @@
-import yaml
 import json
 from django.conf.global_settings import EMAIL_HOST_USER
 from django.core.mail.message import EmailMultiAlternatives
-from django.core.exceptions import ValidationError
-from django.core.files.storage import default_storage
 from django.db import transaction
 from django.db.utils import IntegrityError
 from typing import Union
 
 from retail_purchase_service.celery import app
 
-from .models import Category, Parameter, Product, ProductParameter, Shop, ProductInfo
+from supplier.models import Category, Parameter, Product, ProductParameter, Shop, ProductInfo
 import logging
 
 logger = logging.getLogger(__name__)
@@ -33,11 +30,8 @@ def send_email(message: str, email: str, *args, **kwargs) -> str:
 
 def open_file(file) -> Union[str, dict]:
     try:
-        # Чтение данных из InMemoryUploadedFile
         file_data = file.read()
-        # Преобразование данных в строку
         file_str = file_data.decode('utf-8')
-        # Загрузка JSON
         data = json.loads(file_str)
         return data
     except Exception as e:
@@ -46,7 +40,7 @@ def open_file(file) -> Union[str, dict]:
 
 
 @app.task
-def import_shop_data(file, user_id):
+def import_shop_data(file, user_id, file_name):
     try:
         file_content = open_file(file)
         if isinstance(file_content, str):
@@ -60,33 +54,40 @@ def import_shop_data(file, user_id):
             raise ValueError("Invalid 'goods' data format")
 
         shop_name = data.get("shop", "")
-
-        shop_data = data.get("shop_data", {})
-        categories_data = shop_data.get("categories", [])
+        categories_data = data.get("categories", [])
 
         with transaction.atomic():
             shop, _ = Shop.objects.get_or_create(
-                user_id=user_id, defaults={"name": shop_name}
+                user_id=user_id, defaults={"name": shop_name, "file_name": file_name}
             )
+            # Выведем информацию о магазине после его получения или создания
+            print(f"Shop: {shop.name}, File Name: {shop.file_name}")
+
+            # Выведем категории, связанные с магазином
+            print(f"Categories linked to shop {shop.name}: {shop.categories.all()}")
+
+            # Добавим вывод существующих категорий
+            existing_categories = Category.objects.all()
+            print("Existing categories:", existing_categories)
+            for existing_category in existing_categories:
+                print(f"Existing category: {existing_category.name}")
 
             # Добавим категории
-            categories_to_create = [
-                Category(name=category_data.get("name", ""))
-                for category_data in categories_data
-            ]
+            for category_data in categories_data:
+                category_name = category_data.get("name", "")
+                try:
+                    category, created = Category.objects.get_or_create(name=category_name)
+                    if created:
+                        print(f"Category {category_name} created.")
+                    else:
+                        print(f"Category {category_name} already exists.")
 
-            try:
-                with transaction.atomic():
-                    Category.objects.bulk_create(categories_to_create)
-                    print(f"Categories created successfully.")
-            except Exception as e:
-                print(f"Error creating categories: {e}")
-                for category in categories_to_create:
-                    try:
-                        existing_category = Category.objects.get(name=category.name)
-                        print(f"Category {category.name} already exists with ID {existing_category.id}")
-                    except Category.DoesNotExist:
-                        print(f"Category {category.name} does not exist.")
+                    shop.categories.add(category)
+
+                    category.save()
+                except Exception as e:
+                    print(f"Error creating category {category_name}: {e}")
+                    continue
 
             # Очистим продукты для данного магазина
             Product.objects.filter(shop_id=shop.id).delete()
