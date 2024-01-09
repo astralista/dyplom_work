@@ -700,9 +700,7 @@ class PartnerUpdate(APIView):
                 # Передайте имя файла в функцию import_shop_data
                 import_shop_data(file, user_id, file_name)
 
-                return Response(
-                    {"Status": True, "Message": "Данные успешно загружены"}
-                )
+                return Response({"Status": True, "Message": "Данные успешно загружены"})
             except Exception as e:
                 return Response(
                     {"Status": False, "Error": f"Произошла ошибка: {str(e)}"},
@@ -713,4 +711,3 @@ class PartnerUpdate(APIView):
             {"Status": False, "Errors": "Не указаны все необходимые аргументы"},
             status=status.HTTP_400_BAD_REQUEST,
         )
-

@@ -1,14 +1,15 @@
 import json
+import logging
+from typing import Union
+
 from django.conf.global_settings import EMAIL_HOST_USER
 from django.core.mail.message import EmailMultiAlternatives
 from django.db import transaction
 from django.db.utils import IntegrityError
-from typing import Union
 
 from retail_purchase_service.celery import app
-
-from supplier.models import Category, Parameter, Product, ProductParameter, Shop, ProductInfo
-import logging
+from supplier.models import (Category, Parameter, Product, ProductInfo,
+                             ProductParameter, Shop)
 
 logger = logging.getLogger(__name__)
 
@@ -31,7 +32,7 @@ def send_email(message: str, email: str, *args, **kwargs) -> str:
 def open_file(file) -> Union[str, dict]:
     try:
         file_data = file.read()
-        file_str = file_data.decode('utf-8')
+        file_str = file_data.decode("utf-8")
         data = json.loads(file_str)
         return data
     except Exception as e:
@@ -76,7 +77,9 @@ def import_shop_data(file, user_id, file_name):
             for category_data in categories_data:
                 category_name = category_data.get("name", "")
                 try:
-                    category, created = Category.objects.get_or_create(name=category_name)
+                    category, created = Category.objects.get_or_create(
+                        name=category_name
+                    )
                     if created:
                         print(f"Category {category_name} created.")
                     else:
@@ -103,7 +106,9 @@ def import_shop_data(file, user_id, file_name):
                             category = Category.objects.get(name=category_data)
                             category_id = category.id
                         except Category.DoesNotExist:
-                            print(f"Category {category_data} does not exist for shop {shop_name}.")
+                            print(
+                                f"Category {category_data} does not exist for shop {shop_name}."
+                            )
                             continue
 
                     try:

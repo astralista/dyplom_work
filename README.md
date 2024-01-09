@@ -11,13 +11,14 @@ git clone https://github.com/astralista/dyplom_work.git
 # данные для создания БД PostgreSQL:
 PG_USER=user1
 PG_PASSWORD=12345678
-PG_DB=test_db1
+PG_DB=dyplom_db1
 PG_HOST=db
 
-# данные почты:
+# данные вашей почты(с нее будут отправляться письма на авторизацию новых пользователей):
 EMAIL_HOST=smtp.mail.ru
-EMAIL_HOST_USER =test@mail.ru
-EMAIL_HOST_PASSWORD=P4tgdb21~1%^&
+EMAIL_HOST_USER = test4dyplom@mail.ru
+#это пароль "приложения" почты, настраиваемый пароль почтовика, его надо создать отдельно:
+EMAIL_HOST_PASSWORD=7h4XpnHincD05WyWKP
 
 # данные суперпользователя:
 DJANGO_SUPERUSER_USERNAME=admin
