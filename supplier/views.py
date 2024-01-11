@@ -4,7 +4,7 @@ from django.conf import settings
 from django.contrib.auth import authenticate
 from django.contrib.auth.password_validation import validate_password
 from django.contrib.auth.tokens import PasswordResetTokenGenerator
-from django.core.mail import send_mail
+from django.core.mail import send_mail, EmailMultiAlternatives
 from django.template.loader import render_to_string
 from django.db import IntegrityError
 from django.db.models import F, Q, Sum
@@ -23,7 +23,7 @@ from ujson import loads as load_json
 
 from customer.models import ConfirmEmailToken, Contact, User
 from requests import get
-from supplier.tasks import import_shop_data, send_email
+from supplier.tasks import import_shop_data
 
 from .models import (Category, Order, OrderItem, Parameter, Product,
                      ProductInfo, ProductParameter, Shop)
@@ -88,16 +88,20 @@ class RegisterAccount(APIView):
         token_generator = get_token_generator()
         token = ConfirmEmailToken.objects.create(user=user)
 
+        # Формируем ссылку на подтверждение регистрации
+        confirmation_link = f"{settings.BASE_URL}/user/register/confirm?token={token.key}&email={user.email}"
+
         # Отправляем письмо с токеном по электронной почте
         subject = "Подтверждение регистрации"
-        message = (
-            f"Для подтверждения регистрации перейдите по ссылке: {settings.BASE_URL}/user/register"
-            f"/confirm?token={token.key}&email={user.email}"
-        )
+        text_message = f"Для подтверждения регистрации перейдите по ссылке: {confirmation_link}"
+        html_message = render_to_string("email_templates/confirmation_email_template.html",
+                                        {"confirmation_link": confirmation_link})
         from_email = settings.DEFAULT_FROM_EMAIL
         to_email = user.email
 
-        send_mail(subject, message, from_email, [to_email])
+        msg = EmailMultiAlternatives(subject, text_message, from_email, [to_email])
+        msg.attach_alternative(html_message, "text/html")
+        msg.send()
 
 
 class ConfirmAccount(APIView):
@@ -313,6 +317,7 @@ class BasketView(APIView):
         return Response(serializer.data)
 
         # редактировать корзину
+
     def post(self, request, *args, **kwargs):
         if not request.user.is_authenticated:
             return JsonResponse(
@@ -488,25 +493,55 @@ class OrderView(APIView):
                 order.status = "new"
                 order.save()
 
-                # Отправить письма
-                admin_message = render_to_string("email_templates/admin_email_template.html", {"order": order})
-                client_message = render_to_string("email_templates/client_email_template.html", {"order": order})
+                # Получаем подробную информацию о заказе и его элементах
+                order_with_details = (
+                    Order.objects.filter(id=order.id, user_id=request.user.id)
+                    .select_related("contact")
+                    .prefetch_related(
+                        "ordered_items__product_info__product__category",
+                        "ordered_items__product_info__product_parameters__parameter",
+                    )
+                    .annotate(
+                        total_quantity=Sum("ordered_items__quantity"),
+                        total_sum=Sum(
+                            F("ordered_items__quantity")
+                            * F("ordered_items__product_info__price")
+                        ),
+                    )
+                    .distinct()
+                    .first()
+                )
 
-                send_mail(
+                # Создаем объект EmailMultiAlternatives
+                admin_msg = EmailMultiAlternatives(
                     "Подтверждение заказа админу",
-                    admin_message,
+                    "Plain text content for admin",
                     settings.DEFAULT_FROM_EMAIL,
                     [settings.DEFAULT_FROM_EMAIL],
-                    fail_silently=False,
                 )
 
-                send_mail(
+                # Получаем HTML-версию тела письма из шаблона
+                admin_html_content = render_to_string("email_templates/admin_email_template.html",
+                                                      {"order": order_with_details})
+
+                # Прикрепляем HTML-версию к объекту EmailMultiAlternatives
+                admin_msg.attach_alternative(admin_html_content, "text/html")
+
+                # Отправляем письмо
+                admin_msg.send()
+
+                # Аналогично для пользователя
+                client_msg = EmailMultiAlternatives(
                     "Подтверждение заказа пользователю",
-                    client_message,
+                    "Plain text content for client",
                     settings.DEFAULT_FROM_EMAIL,
                     [order.user.email],
-                    fail_silently=False,
                 )
+
+                client_html_content = render_to_string("email_templates/client_email_template.html",
+                                                       {"order": order_with_details})
+                client_msg.attach_alternative(client_html_content, "text/html")
+                client_msg.send()
 
             except Order.DoesNotExist:
                 return JsonResponse(
@@ -522,7 +557,8 @@ class OrderView(APIView):
             return JsonResponse({"Status": True})
         else:
             return JsonResponse(
-                {"Status": False, "Errors": "Не указаны все необходимые аргументы или аргумент 'id' не является числом"},
+                {"Status": False,
+                 "Errors": "Не указаны все необходимые аргументы или аргумент 'id' не является числом"},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 

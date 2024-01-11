@@ -1,7 +1,0 @@
-@baseUrl = http://localhost:8000/api/v1
-
-# Category info
-GET {{baseUrl}}/categories
-Content-Type: application/json
-
-###

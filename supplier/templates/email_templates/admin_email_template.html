@@ -5,17 +5,74 @@
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>New Order Notification</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f4f4f4;
+            margin: 0;
+            padding: 0;
+        }
+
+        .container {
+            max-width: 600px;
+            margin: 20px auto;
+            background-color: #ffffff;
+            padding: 20px;
+            border-radius: 5px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        }
+
+        h2 {
+            color: #333;
+        }
+
+        p {
+            color: #555;
+        }
+
+        .order-details {
+            margin-top: 10px;
+        }
+
+        .product {
+            border-bottom: 1px solid #ddd;
+            padding: 10px 0;
+        }
+
+        .total {
+            margin-top: 10px;
+            font-weight: bold;
+        }
+    </style>
 </head>
 <body>
-    <h2>New Order Notification</h2>
-    <p>
-        Hello Admin,<br>
-        You have a new order with the following details:<br>
-        Order ID: {{ order.id }}<br>
-        Total Quantity: {{ order.total_quantity }}<br>
-        Total Sum: {{ order.total_sum }}<br>
-        Contact ID: {{ order.contact_id }}<br>
-        ...
-    </p>
+    <div class="container">
+        <h2>Уведомление о новом заказе</h2>
+        <p>
+            Здравствуйте, Администратор,<br>
+            Поступил новый заказ, вот детали по нему:
+        </p>
+
+        <div class="order-details">
+            <p>Номер заказа: {{ order.id }}</p>
+            {% for item in order.ordered_items.all %}
+                <div class="product">
+                    <p>Товар: {{ item.product_info.product.name }}</p>
+                    <p>Количество: {{ item.quantity }}</p>
+                    <p>Цена: {{ item.product_info.price }}</p>
+                    <p>Характеристики:</p>
+                    <ul>
+                        {% for parameter in item.product_info.product_parameters.all %}
+                            <li>{{ parameter.parameter_name }}: {{ parameter.parameter_value }}</li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            {% endfor %}
+            <p class="total">Итого количество: {{ order.total_quantity }}</p>
+            <p class="total">Сумма заказа: {{ order.total_sum }}</p>
+            <p>Contact ID: {{ order.contact_id }}</p>
+            ...
+        </div>
+    </div>
 </body>
 </html>
