@@ -5,6 +5,7 @@ from django.contrib.auth import authenticate
 from django.contrib.auth.password_validation import validate_password
 from django.contrib.auth.tokens import PasswordResetTokenGenerator
 from django.core.mail import send_mail
+from django.template.loader import render_to_string
 from django.db import IntegrityError
 from django.db.models import F, Q, Sum
 from django.db.models.query import Prefetch
@@ -19,12 +20,10 @@ from rest_framework.generics import ListAPIView
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from ujson import loads as load_json
-from yaml import Loader
-from yaml import load as load_yaml
 
 from customer.models import ConfirmEmailToken, Contact, User
 from requests import get
-from supplier.tasks import import_shop_data
+from supplier.tasks import import_shop_data, send_email
 
 from .models import (Category, Order, OrderItem, Parameter, Product,
                      ProductInfo, ProductParameter, Shop)
@@ -313,7 +312,7 @@ class BasketView(APIView):
         serializer = OrderSerializer(basket, many=True)
         return Response(serializer.data)
 
-    # редактировать корзину
+        # редактировать корзину
     def post(self, request, *args, **kwargs):
         if not request.user.is_authenticated:
             return JsonResponse(
@@ -326,28 +325,34 @@ class BasketView(APIView):
             try:
                 items_dict = load_json(items_sting)
             except ValueError:
-                JsonResponse({"Status": False, "Errors": "Неверный формат запроса"})
-            else:
-                basket, _ = Order.objects.get_or_create(
-                    user_id=request.user.id, state="basket"
-                )
-                objects_created = 0
-                for order_item in items_dict:
-                    order_item.update({"order": basket.id})
-                    serializer = OrderItemSerializer(data=order_item)
-                    if serializer.is_valid():
-                        try:
-                            serializer.save()
-                        except IntegrityError as error:
-                            return JsonResponse({"Status": False, "Errors": str(error)})
-                        else:
-                            objects_created += 1
-                    else:
-                        JsonResponse({"Status": False, "Errors": serializer.errors})
-
                 return JsonResponse(
-                    {"Status": True, "Создано объектов": objects_created}
+                    {"Status": False, "Errors": "Неверный формат запроса"}
                 )
+
+            basket, _ = Order.objects.get_or_create(
+                user_id=request.user.id, state="basket"
+            )
+            objects_created = 0
+            for order_item in items_dict:
+                order_item.update({"order": basket.id})
+                serializer = OrderItemSerializer(data=order_item)
+                if serializer.is_valid():
+                    try:
+                        serializer.save()
+                        objects_created += 1
+                    except IntegrityError as error:
+                        return JsonResponse(
+                            {"Status": False, "Errors": str(error)}
+                        )
+                else:
+                    return JsonResponse(
+                        {"Status": False, "Errors": serializer.errors}
+                    )
+
+            return JsonResponse(
+                {"Status": True, "Создано объектов": objects_created}
+            )
+
         return JsonResponse(
             {"Status": False, "Errors": "Не указаны все необходимые аргументы"}
         )
@@ -375,7 +380,10 @@ class BasketView(APIView):
 
             if objects_deleted:
                 deleted_count = OrderItem.objects.filter(query).delete()[0]
-                return JsonResponse({"Status": True, "Удалено объектов": deleted_count})
+                return JsonResponse(
+                    {"Status": True, "Удалено объектов": deleted_count}
+                )
+
         return JsonResponse(
             {"Status": False, "Errors": "Не указаны все необходимые аргументы"}
         )
@@ -384,33 +392,51 @@ class BasketView(APIView):
     def put(self, request, *args, **kwargs):
         if not request.user.is_authenticated:
             return JsonResponse(
-                {"Status": False, "Error": "Log in required"},
+                {"Status": False, "Error": "Требуется войти в систему"},
                 status=status.HTTP_403_FORBIDDEN,
             )
 
-        items_sting = request.data.get("items")
-        if items_sting:
-            try:
-                items_dict = load_json(items_sting)
-            except ValueError:
-                JsonResponse({"Status": False, "Errors": "Неверный формат запроса"})
-            else:
-                basket, _ = Order.objects.get_or_create(
-                    user_id=request.user.id, state="basket"
-                )
-                objects_updated = 0
-                for order_item in items_dict:
-                    if (
-                        type(order_item["id"]) == int
-                        and type(order_item["quantity"]) == int
-                    ):
-                        objects_updated += OrderItem.objects.filter(
-                            order_id=basket.id, id=order_item["id"]
-                        ).update(quantity=order_item["quantity"])
+        items_list = request.data.get("items")
+        if items_list:
+            basket, created = Order.objects.get_or_create(
+                user_id=request.user.id, status="basket"
+            )
 
-                return JsonResponse(
-                    {"Status": True, "Обновлено объектов": objects_updated}
-                )
+            if created:
+                basket.state = "basket"
+                basket.save()
+
+            objects_updated = 0
+            for order_item_data in items_list:
+                product_id = order_item_data.get("id")
+                quantity = order_item_data.get("quantity")
+
+                if isinstance(product_id, int) and isinstance(quantity, int):
+                    try:
+                        product_info = ProductInfo.objects.get(product_id=product_id)
+                        order_item, created = OrderItem.objects.get_or_create(
+                            order=basket, product_info=product_info, defaults={"quantity": quantity}
+                        )
+
+                        if not created:
+                            order_item.quantity = quantity
+                            order_item.save()
+
+                        objects_updated += 1
+                    except ProductInfo.DoesNotExist:
+                        return JsonResponse(
+                            {"Status": False, "Errors": f"Товар с id {product_id} не найден"}
+                        )
+                else:
+                    return JsonResponse(
+                        {"Status": False, "Errors": "Неверный формат данных в запросе"}
+                    )
+
+            print("Objects updated:", objects_updated)
+            return JsonResponse(
+                {"Status": True, "Обновлено объектов": objects_updated}
+            )
+
         return JsonResponse(
             {"Status": False, "Errors": "Не указаны все необходимые аргументы"}
         )
@@ -418,64 +444,87 @@ class BasketView(APIView):
 
 class OrderView(APIView):
     """
-    Класс для получения и размешения заказов пользователями
+    Класс для получения и размещения заказов пользователями
     """
 
     throttle_scope = "user"
 
     def get(self, request, *args, **kwargs):
         if not request.user.is_authenticated:
-            return Response(
+            return JsonResponse(
                 {"Status": False, "Error": "Log in required"},
                 status=status.HTTP_403_FORBIDDEN,
             )
 
-        order = (
+        orders = (
             Order.objects.filter(user_id=request.user.id)
             .exclude(status="basket")
             .select_related("contact")
-            .prefetch_related("ordered_items")
+            .prefetch_related("ordered_items__product_info__product__category",
+                              "ordered_items__product_info__product_parameters__parameter")
             .annotate(
                 total_quantity=Sum("ordered_items__quantity"),
-                total_sum=Sum("ordered_items__total_amount"),
+                total_sum=Sum(F("ordered_items__quantity") * F("ordered_items__product_info__price"))
             )
             .distinct()
         )
 
-        serializer = OrderSerializer(order, many=True)
+        serializer = OrderSerializer(orders, many=True)
         return Response(serializer.data)
 
     # Размещаем заказ из корзины и посылаем письмо об изменении статуса заказа.
     def post(self, request, *args, **kwargs):
         if not request.user.is_authenticated:
-            return Response(
+            return JsonResponse(
                 {"Status": False, "Error": "Log in required"},
                 status=status.HTTP_403_FORBIDDEN,
             )
 
-        if request.data["id"].isdigit():
+        order_id = request.data.get("id")
+        if isinstance(order_id, int):
             try:
-                is_updated = Order.objects.filter(
-                    id=request.data["id"], user_id=request.user.id
-                ).update(contact_id=request.data["contact"], status="new")
+                order = Order.objects.get(id=order_id, user_id=request.user.id, status="basket")
+                order.contact_id = request.data.get("contact")
+                order.status = "new"
+                order.save()
+
+                # Отправить письма
+                admin_message = render_to_string("email_templates/admin_email_template.html", {"order": order})
+                client_message = render_to_string("email_templates/client_email_template.html", {"order": order})
+
+                send_mail(
+                    "Подтверждение заказа админу",
+                    admin_message,
+                    settings.DEFAULT_FROM_EMAIL,
+                    [settings.DEFAULT_FROM_EMAIL],
+                    fail_silently=False,
+                )
+
+                send_mail(
+                    "Подтверждение заказа пользователю",
+                    client_message,
+                    settings.DEFAULT_FROM_EMAIL,
+                    [order.user.email],
+                    fail_silently=False,
+                )
+
+            except Order.DoesNotExist:
+                return JsonResponse(
+                    {"Status": False, "Errors": "Заказ с указанным id не найден или не является корзиной"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
             except IntegrityError as error:
-                return Response(
+                return JsonResponse(
                     {"Status": False, "Errors": "Неправильно указаны аргументы"},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
-            else:
-                if is_updated:
-                    request.user.email_user(
-                        f"Обновление статуса заказа",
-                        "Заказ сформирован",
-                        from_email=settings.EMAIL_HOST_USER,
-                    )
-                    return Response({"Status": True})
 
-        return Response(
-            {"Status": False, "Errors": "Не указаны все необходимые аргументы"},
-            status=status.HTTP_400_BAD_REQUEST,
-        )
+            return JsonResponse({"Status": True})
+        else:
+            return JsonResponse(
+                {"Status": False, "Errors": "Не указаны все необходимые аргументы или аргумент 'id' не является числом"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
 
 class ContactView(APIView):
