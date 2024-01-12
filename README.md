@@ -34,3 +34,6 @@ docker-compose up --build
 [https://0.0.0.0:8000/](0.0.0.0:8000/)
 
 Данные для входа в админ панель (суперпользователь) и для доступа к БД вы ранее указали в **.env** файле
+
+Команды для работы с API прописаны на сервисе POSTMAN:
+[POSTMAN - ссылка](https://www.postman.com/lively-capsule-851865/workspace/dyplom-api-service/overview)

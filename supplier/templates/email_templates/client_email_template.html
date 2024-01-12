@@ -4,29 +4,6 @@
     <meta charset="UTF-8">
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Order Confirmation</title>
-</head>
-<body>
-    <h2>Order Confirmation</h2>
-    <p>
-        Здравствуйте, {{ order.user.username }},<br>
-        Спасибо что разметили заказ!<br>
-        Детали по вашему заказу:<br>
-        Order ID: {{ order.id }}<br>
-        Total Quantity: {{ order.total_quantity }}<br>
-        Total Sum: {{ order.total_sum }}<br>
-        Contact ID: {{ order.contact_id }}<br>
-        ...
-    </p>
-</body>
-</html>
-
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta http-equiv="X-UA-Compatible" content="IE=edge">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>New Order Notification</title>
     <style>
         body {
@@ -73,7 +50,7 @@
         <h2>Уведомление о новом заказе</h2>
         <p>
             Здравствуйте, {{ order.user.username }},<br>
-            Спасибо что разметили заказ!<br>
+            Спасибо что размеcтили заказ!<br>
             Детали по вашему заказу:<br>
         </p>
 
@@ -84,18 +61,10 @@
                     <p>Товар: {{ item.product_info.product.name }}</p>
                     <p>Количество: {{ item.quantity }}</p>
                     <p>Цена: {{ item.product_info.price }}</p>
-                    <p>Характеристики:</p>
-                    <ul>
-                        {% for parameter in item.product_info.product_parameters.all %}
-                            <li>{{ parameter.parameter_name }}: {{ parameter.parameter_value }}</li>
-                        {% endfor %}
-                    </ul>
                 </div>
             {% endfor %}
             <p class="total">Итого количество: {{ order.total_quantity }}</p>
             <p class="total">Сумма заказа: {{ order.total_sum }}</p>
-            <p>Contact ID: {{ order.contact_id }}</p>
-            ...
         </div>
     </div>
 </body>

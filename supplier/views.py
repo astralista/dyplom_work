@@ -4,16 +4,17 @@ from django.conf import settings
 from django.contrib.auth import authenticate
 from django.contrib.auth.password_validation import validate_password
 from django.contrib.auth.tokens import PasswordResetTokenGenerator
-from django.core.mail import send_mail, EmailMultiAlternatives
-from django.template.loader import render_to_string
+from django.core.mail import EmailMultiAlternatives, send_mail
 from django.db import IntegrityError
 from django.db.models import F, Q, Sum
 from django.db.models.query import Prefetch
 from django.http import JsonResponse
+from django.template.loader import render_to_string
 from django.urls import reverse
 from django.utils.encoding import force_bytes
 from django.utils.http import urlsafe_base64_encode
 from django_rest_passwordreset.tokens import get_token_generator
+from requests import get
 from rest_framework import status, viewsets
 from rest_framework.authtoken.models import Token
 from rest_framework.generics import ListAPIView
@@ -22,7 +23,6 @@ from rest_framework.views import APIView
 from ujson import loads as load_json
 
 from customer.models import ConfirmEmailToken, Contact, User
-from requests import get
 from supplier.tasks import import_shop_data
 
 from .models import (Category, Order, OrderItem, Parameter, Product,
@@ -93,9 +93,13 @@ class RegisterAccount(APIView):
 
         # Отправляем письмо с токеном по электронной почте
         subject = "Подтверждение регистрации"
-        text_message = f"Для подтверждения регистрации перейдите по ссылке: {confirmation_link}"
-        html_message = render_to_string("email_templates/confirmation_email_template.html",
-                                        {"confirmation_link": confirmation_link})
+        text_message = (
+            f"Для подтверждения регистрации перейдите по ссылке: {confirmation_link}"
+        )
+        html_message = render_to_string(
+            "email_templates/confirmation_email_template.html",
+            {"confirmation_link": confirmation_link},
+        )
         from_email = settings.DEFAULT_FROM_EMAIL
         to_email = user.email
 
@@ -346,17 +350,11 @@ class BasketView(APIView):
                         serializer.save()
                         objects_created += 1
                     except IntegrityError as error:
-                        return JsonResponse(
-                            {"Status": False, "Errors": str(error)}
-                        )
+                        return JsonResponse({"Status": False, "Errors": str(error)})
                 else:
-                    return JsonResponse(
-                        {"Status": False, "Errors": serializer.errors}
-                    )
+                    return JsonResponse({"Status": False, "Errors": serializer.errors})
 
-            return JsonResponse(
-                {"Status": True, "Создано объектов": objects_created}
-            )
+            return JsonResponse({"Status": True, "Создано объектов": objects_created})
 
         return JsonResponse(
             {"Status": False, "Errors": "Не указаны все необходимые аргументы"}
@@ -385,9 +383,7 @@ class BasketView(APIView):
 
             if objects_deleted:
                 deleted_count = OrderItem.objects.filter(query).delete()[0]
-                return JsonResponse(
-                    {"Status": True, "Удалено объектов": deleted_count}
-                )
+                return JsonResponse({"Status": True, "Удалено объектов": deleted_count})
 
         return JsonResponse(
             {"Status": False, "Errors": "Не указаны все необходимые аргументы"}
@@ -420,7 +416,9 @@ class BasketView(APIView):
                     try:
                         product_info = ProductInfo.objects.get(product_id=product_id)
                         order_item, created = OrderItem.objects.get_or_create(
-                            order=basket, product_info=product_info, defaults={"quantity": quantity}
+                            order=basket,
+                            product_info=product_info,
+                            defaults={"quantity": quantity},
                         )
 
                         if not created:
@@ -430,7 +428,10 @@ class BasketView(APIView):
                         objects_updated += 1
                     except ProductInfo.DoesNotExist:
                         return JsonResponse(
-                            {"Status": False, "Errors": f"Товар с id {product_id} не найден"}
+                            {
+                                "Status": False,
+                                "Errors": f"Товар с id {product_id} не найден",
+                            }
                         )
                 else:
                     return JsonResponse(
@@ -438,9 +439,7 @@ class BasketView(APIView):
                     )
 
             print("Objects updated:", objects_updated)
-            return JsonResponse(
-                {"Status": True, "Обновлено объектов": objects_updated}
-            )
+            return JsonResponse({"Status": True, "Обновлено объектов": objects_updated})
 
         return JsonResponse(
             {"Status": False, "Errors": "Не указаны все необходимые аргументы"}
@@ -465,11 +464,16 @@ class OrderView(APIView):
             Order.objects.filter(user_id=request.user.id)
             .exclude(status="basket")
             .select_related("contact")
-            .prefetch_related("ordered_items__product_info__product__category",
-                              "ordered_items__product_info__product_parameters__parameter")
+            .prefetch_related(
+                "ordered_items__product_info__product__category",
+                "ordered_items__product_info__product_parameters__parameter",
+            )
             .annotate(
                 total_quantity=Sum("ordered_items__quantity"),
-                total_sum=Sum(F("ordered_items__quantity") * F("ordered_items__product_info__price"))
+                total_sum=Sum(
+                    F("ordered_items__quantity")
+                    * F("ordered_items__product_info__price")
+                ),
             )
             .distinct()
         )
@@ -488,7 +492,9 @@ class OrderView(APIView):
         order_id = request.data.get("id")
         if isinstance(order_id, int):
             try:
-                order = Order.objects.get(id=order_id, user_id=request.user.id, status="basket")
+                order = Order.objects.get(
+                    id=order_id, user_id=request.user.id, status="basket"
+                )
                 order.contact_id = request.data.get("contact")
                 order.status = "new"
                 order.save()
@@ -521,8 +527,10 @@ class OrderView(APIView):
                 )
 
                 # Получаем HTML-версию тела письма из шаблона
-                admin_html_content = render_to_string("email_templates/admin_email_template.html",
-                                                      {"order": order_with_details})
+                admin_html_content = render_to_string(
+                    "email_templates/admin_email_template.html",
+                    {"order": order_with_details},
+                )
 
                 # Прикрепляем HTML-версию к объекту EmailMultiAlternatives
                 admin_msg.attach_alternative(admin_html_content, "text/html")
@@ -538,14 +546,19 @@ class OrderView(APIView):
                     [order.user.email],
                 )
 
-                client_html_content = render_to_string("email_templates/client_email_template.html",
-                                                       {"order": order_with_details})
+                client_html_content = render_to_string(
+                    "email_templates/client_email_template.html",
+                    {"order": order_with_details},
+                )
                 client_msg.attach_alternative(client_html_content, "text/html")
                 client_msg.send()
 
             except Order.DoesNotExist:
                 return JsonResponse(
-                    {"Status": False, "Errors": "Заказ с указанным id не найден или не является корзиной"},
+                    {
+                        "Status": False,
+                        "Errors": "Заказ с указанным id не найден или не является корзиной",
+                    },
                     status=status.HTTP_400_BAD_REQUEST,
                 )
             except IntegrityError as error:
@@ -557,8 +570,10 @@ class OrderView(APIView):
             return JsonResponse({"Status": True})
         else:
             return JsonResponse(
-                {"Status": False,
-                 "Errors": "Не указаны все необходимые аргументы или аргумент 'id' не является числом"},
+                {
+                    "Status": False,
+                    "Errors": "Не указаны все необходимые аргументы или аргумент 'id' не является числом",
+                },
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
