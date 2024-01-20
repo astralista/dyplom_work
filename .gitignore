@@ -4,3 +4,4 @@ __pycache__
 /static
 customer/migrations
 supplier/migrations
+/venv

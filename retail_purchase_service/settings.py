@@ -10,6 +10,7 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/4.2/ref/settings/
 """
 import os
+import sys
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -89,7 +90,7 @@ DATABASES = {
         "NAME": os.getenv("PG_DB"),
         "USER": os.getenv("PG_USER"),
         "PASSWORD": os.getenv("PG_PASSWORD"),
-        "HOST": os.getenv("PG_HOST"),  # "localhost"
+        "HOST": "localhost",  # os.getenv("PG_HOST")
         "PORT": "5432",
     }
 }
