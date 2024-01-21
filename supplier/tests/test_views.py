@@ -1,8 +1,9 @@
+from django.contrib.auth import get_user_model
 from django.test import TestCase
 from django.urls import reverse
-from django.contrib.auth import get_user_model
 from rest_framework import status
 from rest_framework.test import APIClient
+
 from customer.models import ConfirmEmailToken
 
 User = get_user_model()
@@ -59,7 +60,9 @@ class RegisterAccountTests(TestCase):
 class ConfirmAccountTests(TestCase):
     def setUp(self):
         self.client = APIClient()
-        self.confirm_url = reverse("supplier:confirm-email")  # Используем правильное имя URL
+        self.confirm_url = reverse(
+            "supplier:confirm-email"
+        )  # Используем правильное имя URL
         # Создаем пользователя для тестирования
         self.user = User.objects.create(
             first_name="John",

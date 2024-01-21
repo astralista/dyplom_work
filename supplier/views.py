@@ -14,6 +14,7 @@ from django.urls import reverse
 from django.utils.encoding import force_bytes
 from django.utils.http import urlsafe_base64_encode
 from django_rest_passwordreset.tokens import get_token_generator
+from drf_spectacular.utils import extend_schema
 from requests import get
 from rest_framework import status, viewsets
 from rest_framework.authtoken.models import Token
@@ -266,6 +267,7 @@ class ProductInfoView(viewsets.ReadOnlyModelViewSet):
     serializer_class = ProductInfoSerializer
     ordering = ("product",)
 
+    @extend_schema(responses=CategorySerializer)
     def get_queryset(self):
         query = Q(shop__state=True)
         shop_id = self.request.query_params.get("shop_id")
@@ -296,6 +298,7 @@ class BasketView(APIView):
     throttle_scope = "user"
 
     # получить корзину
+    @extend_schema(responses=CategorySerializer)
     def get(self, request, *args, **kwargs):
         if not request.user.is_authenticated:
             return JsonResponse(
@@ -322,6 +325,7 @@ class BasketView(APIView):
 
         # редактировать корзину
 
+    @extend_schema(responses=CategorySerializer)
     def post(self, request, *args, **kwargs):
         if not request.user.is_authenticated:
             return JsonResponse(
@@ -361,6 +365,7 @@ class BasketView(APIView):
         )
 
     # удалить товары из корзины
+    @extend_schema(responses=CategorySerializer)
     def delete(self, request, *args, **kwargs):
         if not request.user.is_authenticated:
             return JsonResponse(
@@ -390,6 +395,7 @@ class BasketView(APIView):
         )
 
     # добавить позиции в корзину
+    @extend_schema(responses=CategorySerializer)
     def put(self, request, *args, **kwargs):
         if not request.user.is_authenticated:
             return JsonResponse(
@@ -453,6 +459,7 @@ class OrderView(APIView):
 
     throttle_scope = "user"
 
+    @extend_schema(responses=CategorySerializer)
     def get(self, request, *args, **kwargs):
         if not request.user.is_authenticated:
             return JsonResponse(
@@ -482,6 +489,7 @@ class OrderView(APIView):
         return Response(serializer.data)
 
     # Размещаем заказ из корзины и посылаем письмо об изменении статуса заказа.
+    @extend_schema(responses=CategorySerializer)
     def post(self, request, *args, **kwargs):
         if not request.user.is_authenticated:
             return JsonResponse(
@@ -586,6 +594,7 @@ class ContactView(APIView):
     throttle_scope = "user"
 
     # получить мои контакты
+    @extend_schema(responses=CategorySerializer)
     def get(self, request, *args, **kwargs):
         if not request.user.is_authenticated:
             return JsonResponse(
@@ -597,6 +606,7 @@ class ContactView(APIView):
         return Response(serializer.data)
 
     # добавить новый контакт
+    @extend_schema(responses=CategorySerializer)
     def post(self, request, *args, **kwargs):
         if not request.user.is_authenticated:
             return JsonResponse(
@@ -620,6 +630,7 @@ class ContactView(APIView):
         )
 
     # удалить контакт
+    @extend_schema(responses=CategorySerializer)
     def delete(self, request, *args, **kwargs):
         if not request.user.is_authenticated:
             return JsonResponse(
@@ -645,6 +656,7 @@ class ContactView(APIView):
         )
 
     # редактировать контакт
+    @extend_schema(responses=CategorySerializer)
     def put(self, request, *args, **kwargs):
         if not request.user.is_authenticated:
             return JsonResponse(
@@ -680,6 +692,7 @@ class PartnerOrders(APIView):
 
     throttle_scope = "user"
 
+    @extend_schema(responses=CategorySerializer)
     def get(self, request, *args, **kwargs):
         if not request.user.is_authenticated:
             return Response(
@@ -720,6 +733,7 @@ class PartnerState(APIView):
     throttle_scope = "user"
 
     # Получить текущий статус получения заказов у магазина
+    @extend_schema(responses=CategorySerializer)
     def get(self, request, *args, **kwargs):
         if not request.user.is_authenticated:
             return Response(
@@ -738,6 +752,7 @@ class PartnerState(APIView):
         return Response(serializer.data)
 
     # Изменить текущий статус получения заказов у магазина
+    @extend_schema(responses=CategorySerializer)
     def post(self, request, *args, **kwargs):
         if not request.user.is_authenticated:
             return Response(
@@ -777,6 +792,7 @@ class PartnerUpdate(APIView):
 
     throttle_scope = "partner"
 
+    @extend_schema(responses=CategorySerializer)
     def post(self, request, *args, **kwargs):
         if not request.user.is_authenticated:
             return Response(
