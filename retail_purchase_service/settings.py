@@ -10,7 +10,6 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/4.2/ref/settings/
 """
 import os
-import sys
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -36,6 +35,7 @@ ALLOWED_HOSTS = ["*"]
 # Application definition
 
 INSTALLED_APPS = [
+    "baton",
     "django.contrib.admin",
     "django.contrib.auth",
     "django.contrib.contenttypes",
@@ -50,6 +50,8 @@ INSTALLED_APPS = [
     "import_export",
     "drf_spectacular",
     "drf_spectacular_sidecar",  # required for Django collectstatic discovery
+    # ... (place baton.autodiscover at the very end)
+    "baton.autodiscover",
 ]
 
 MIDDLEWARE = [
@@ -92,7 +94,7 @@ DATABASES = {
         "NAME": os.getenv("PG_DB"),
         "USER": os.getenv("PG_USER"),
         "PASSWORD": os.getenv("PG_PASSWORD"),
-        "HOST": os.getenv("PG_HOST"),  # "localhost"
+        "HOST": "localhost",  # os.getenv("PG_HOST")
         "PORT": "5432",
     }
 }
@@ -189,4 +191,69 @@ SPECTACULAR_SETTINGS = {
     "DESCRIPTION": "Service for ordering goods for retail chains",
     "VERSION": "1.0.0",
     "SERVE_INCLUDE_SCHEMA": False,
+}
+
+BATON = {
+    "SITE_HEADER": "Baton",
+    "SITE_TITLE": "Baton",
+    "INDEX_TITLE": "Site administration",
+    "SUPPORT_HREF": "https://github.com/otto-torino/django-baton/issues",
+    "COPYRIGHT": 'copyright © 2020 <a href="https://www.otto.to.it">Otto srl</a>',  # noqa
+    "POWERED_BY": '<a href="https://www.otto.to.it">Otto srl</a>',
+    "CONFIRM_UNSAVED_CHANGES": True,
+    "SHOW_MULTIPART_UPLOADING": True,
+    "ENABLE_IMAGES_PREVIEW": True,
+    "CHANGELIST_FILTERS_IN_MODAL": True,
+    "CHANGELIST_FILTERS_ALWAYS_OPEN": False,
+    "CHANGELIST_FILTERS_FORM": True,
+    "MENU_ALWAYS_COLLAPSED": False,
+    "MENU_TITLE": "Menu",
+    "MESSAGES_TOASTS": False,
+    "GRAVATAR_DEFAULT_IMG": "retro",
+    "GRAVATAR_ENABLED": True,
+    "LOGIN_SPLASH": "/static/core/img/login-splash.png",
+    "FORCE_THEME": None,
+    "SEARCH_FIELD": {
+        "label": "Search contents...",
+        "url": "/search/",
+    },
+    "MENU": (
+        {"type": "title", "label": "main", "apps": ("auth",)},
+        {
+            "type": "app",
+            "name": "auth",
+            "label": "Authentication",
+            "icon": "fa fa-lock",
+            "models": (
+                {"name": "user", "label": "Users"},
+                {"name": "group", "label": "Groups"},
+            ),
+        },
+        {"type": "title", "label": "Contents", "apps": ("flatpages",)},
+        {"type": "model", "label": "Pages", "name": "flatpage", "app": "flatpages"},
+        {
+            "type": "free",
+            "label": "Custom Link",
+            "url": "http://www.google.it",
+            "perms": ("flatpages.add_flatpage", "auth.change_user"),
+        },
+        {
+            "type": "free",
+            "label": "My parent voice",
+            "default_open": True,
+            "children": [
+                {
+                    "type": "model",
+                    "label": "A Model",
+                    "name": "mymodelname",
+                    "app": "myapp",
+                },
+                {
+                    "type": "free",
+                    "label": "Another custom link",
+                    "url": "http://www.google.it",
+                },
+            ],
+        },
+    ),
 }
